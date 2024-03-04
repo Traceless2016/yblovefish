@@ -1,0 +1,150 @@
+/*
+    This sketch establishes a TCP connection to a "quote of the day" service.
+    It sends a "hello" message, and then prints received data.
+
+
+当程序开始执行时，将调用setup()函数，使用此函数
+  ①用来初始化变量
+  ②管脚模式
+  ③调用库函数
+
+  注意：setup()函数将只运行一次。
+loop()
+  功能：连续执行函数内的语句
+  实际上Arduino编程环境封装了上层调用，使得在进行Arduino开发时，没有像传统C/C++程序需要在Arduino中显式使用入口函数main。但实际上main函数存在于Arduino核心库中，且仍然是程序的入口。
+  在Arduino核心库中可见main.cpp文件，其内容可见main_origin.cpp文件中：
+  
+  通过以上程序可见，Arduino程序中编写的setup和loop函数，都在main函数中调用了。loop的循环执行，是通过for循环实现的，且每次loop结束后，都会进行串口事件判断。
+  return 只会跳出当前的loop，并重新运行loop中的内容。
+  delay(500);1000表示1s
+
+服务器端操作步骤：
+1. "receiving from remote server"后测试是否能够正常发送数据；
+2. 发送设置先点 Ascall，在发送窗口中发送想要发送的数据：“CMD:{命令语句} ” ；
+3. 后面在发送设置中点Hex，然后再发送窗口中新增 0x00，最为结束符号；
+
+# 控制逻辑：
+1. 每一天的固定时间会打开那个水泵浇水的，现在是夜间的 8：00；
+2. 
+*/
+
+#include <ESP8266WiFi.h>
+// #include "/head/ctrl_code.h"   // 这样是对的
+#include "head/ctrl_code.h"
+#ifndef STASSID
+#define STASSID "18pro"
+#define STAPSK  "43426mqj"
+#endif
+
+const char* ssid     = STASSID;
+const char* password = STAPSK;
+
+const char* host = "100.78.64.126";
+// const char* host = "192.168.137.1";
+const uint16_t port = 1030;
+unsigned long connect_time_out = 30; // 如果超过30秒连不上host，则不再尝试连接
+unsigned long start_time = 0;
+
+void setup() {
+
+  Serial.begin(115200);
+
+  // We start by connecting to a WiFi network
+
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
+     would try to act as both a client and an access-point and could cause
+     network-issues with your other WiFi-devices on your WiFi-network. */
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  static bool wait = false;
+
+  char buff[512];  // 接收到的信息
+  int nm =0;  // 所接收到的数据指针位置
+
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+  WiFiClient client;
+
+  // Use WiFiClient class to create TCP connections
+  if (millis()-start_time>connect_time_out){
+    
+  }
+  else{
+      if (!client.connect(host, port)) {
+        Serial.println("connection failed");
+        delay(500);
+        return;  // 会退出当前的loop，并重新开始连接所定义的网址
+      }
+
+      // This will send a string to the server
+      Serial.println("sending data to server");
+      if (client.connected()) {
+        client.println("hello from ESP8266");
+      }
+
+      // wait for data to be available
+      unsigned long timeout = millis();  // millis()是一个函数,它只返回自 Arduino 板开始运行当前程序而不冻结程序以来经过的毫秒数。大约 50 天后,该时间数将溢出(即回到零)。
+      client.println("Test receiving data");
+      while (client.available() == 0) {  
+        if (millis() - timeout > 50000) {
+          Serial.println(">>> Client Timeout !");
+          client.stop();
+          delay(6000);
+          return;
+        }
+      }
+
+      // Read all the lines of the reply from server and print them to Serial
+      Serial.println("receiving from remote server");
+      // not testing 'client.connected()' since we do not need to send data here
+      while (client.available()) {  // 检测客户端是否有数据
+        char ch = static_cast<char>(client.read());
+        Serial.print(ch);
+      }
+
+  }
+  
+  char* rec_cmd;
+  // while (true)
+  // {
+    
+  // }
+  ESP.deepSleep(3e6); //作者：夏祭鱿鱼 https://www.bilibili.com/read/cv5988390  睡眠30s  最大值4,294,967,295， 大约71分钟。
+  Serial.println("hello!");
+  
+  // Close the connection
+  Serial.println();
+  Serial.println("closing connection");
+  client.stop();
+
+  if (wait) {
+    delay(300000); // execute once every 5 minutes 5*60=300, don't flood remote service
+  }
+  wait = true;
+}
+
+原理图：
+
+https://www.yourcee.com/newsinfo/2925899.html
+
+https://www.baidu.com/link?url=hrrRWzHRnIKFivy5Ic7biAigIacX-21NL8cJjGpTQN_VZV9enneSCtblY3JqSyMF4SRbRaBQ2h2PtdjGK8vvy_&wd=&eqid=f4cc0018002c03e200000003652c7c4e
